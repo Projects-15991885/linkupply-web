@@ -25,6 +25,42 @@ function playRequestSound() {
   } catch {}
 }
 
+function CopyIdBadge({ linkId }) {
+  const [copied, setCopied] = useState(false);
+
+  function copyId() {
+    navigator.clipboard.writeText(linkId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  }
+
+  return (
+    <button
+      onClick={copyId}
+      title="Tap to copy your Link ID"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        background: copied ? "rgba(53,214,184,0.15)" : "var(--brand-soft)",
+        border: `1px solid ${copied ? "var(--online)" : "rgba(110,91,250,0.35)"}`,
+        color: copied ? "var(--online)" : "var(--brand-2)",
+        borderRadius: 8,
+        padding: "3px 9px",
+        fontSize: 12,
+        fontWeight: 600,
+        marginTop: 2,
+        cursor: "pointer",
+        transition: "all 0.15s",
+      }}
+    >
+      {copied ? "✓ Copied!" : `ID: ${linkId}`}
+      {!copied && <span style={{ opacity: 0.7 }}>⎘</span>}
+    </button>
+  );
+}
+
 export default function Home({ me, onLogout }) {
   const [tab, setTab] = useState("chats");
   const [friends, setFriends] = useState([]);
@@ -116,10 +152,10 @@ export default function Home({ me, onLogout }) {
             <div className="avatar">
               <div>{me.profileImage && <img src={me.profileImage} alt="" />}</div>
             </div>
-            <div>
-              <div className="name">{me.name}</div>
-              <div className="linkid">ID: {me.linkId}</div>
-            </div>
+            <div style={{ minWidth: 0 }}>
+           <div className="name">{me.name}</div>
+           <CopyIdBadge linkId={me.linkId} />
+           </div>
           </div>
           <div className="header-actions">
             <button className="ghost-icon-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
