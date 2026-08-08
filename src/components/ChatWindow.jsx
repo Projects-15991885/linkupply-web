@@ -62,25 +62,56 @@ function MediaBubble({ msg, mine, onOpenLightbox }) {
   const isVideo = msg.type === "video";
   const isMedia = isImage || isVideo;
   const autoDownload = localStorage.getItem("linkupply_autodownload") === "on";
-  const [downloaded, setDownloaded] = useState(mine || autoDownload);
-  const [downloading, setDownloading] = useState(false);
-  const [objectUrl, setObjectUrl] = useState(null);
   const fullUrl = `${BASE_URL}${msg.fileUrl}`;
 
-  useEffect(() => {
-    if ((mine || autoDownload) && !objectUrl) handleDownload(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  function getDownloadedSet() {
+    try { return new Set(JSON.parse(localStorage.getItem("linkupply_downloaded_ids") || "[]")); }
+    catch { return new Set(); }
+  }
+  function markDownloaded(id) {
+    const s = getDownloadedSet();
+    s.add(id);
+    localStorage.setItem("linkupply_downloaded_ids", JSON.stringify([...s].slice(-1000)));
+  }
 
-  async function handleDownload(silent) {
+  const alreadyDownloaded = !mine && getDownloadedSet().has(msg._id);
+
+  const [downloaded, setDownloaded] = useState(mine || alreadyDownloaded);
+  const [downloading, setDownloading] = useState(false);
+  const [objectUrl, setObjectUrl] = useState(null);
+
+  // fetch blob only for on-screen display — does NOT save to disk
+  async function fetchForDisplay() {
+    try {
+      const res = await fetch(fullUrl);
+      const blob = await res.blob();
+      setObjectUrl(URL.createObjectURL(blob));
+      setDownloaded(true);
+    } catch (err) { console.error(err); }
+  }
+
+  // actually saves the file to disk (real download) + remembers it
+  async function downloadToDisk() {
     if (downloading) return;
     setDownloading(true);
     try {
       const url = await forceDownload(fullUrl, msg.fileName);
-      setObjectUrl(url); setDownloaded(true);
-    } catch (err) { if (!silent) console.error(err); }
+      setObjectUrl(url);
+      setDownloaded(true);
+      markDownloaded(msg._id);
+    } catch (err) { console.error(err); }
     finally { setDownloading(false); }
   }
+
+  useEffect(() => {
+    if (mine) return; // sender's own media just displays via fullUrl, no disk save
+    if (alreadyDownloaded) {
+      fetchForDisplay(); // already saved once before — just show it, don't re-save
+    } else if (autoDownload) {
+      downloadToDisk(); // first time seeing it + auto-download on — save once
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (isMedia) {
     const src = mine ? fullUrl : objectUrl;
@@ -97,7 +128,7 @@ function MediaBubble({ msg, mine, onOpenLightbox }) {
             <div className="media-locked">
               <div className="kind-icon">{isImage ? "🖼" : "🎬"}</div>
               {downloading ? <div className="downloading">Downloading…</div> : (
-                <button className="dl-btn" onClick={() => handleDownload(false)}>⭳ Download</button>
+                <button className="dl-btn" onClick={downloadToDisk}>⭳ Download</button>
               )}
               <div className="fname">{msg.fileName} · {formatSize(msg.fileSize)}</div>
             </div>
@@ -110,7 +141,7 @@ function MediaBubble({ msg, mine, onOpenLightbox }) {
 
   return (
     <div className="bubble">
-      <a className="file-chip" href="#" onClick={(e) => { e.preventDefault(); handleDownload(false); }}>
+      <a className="file-chip" href="#" onClick={(e) => { e.preventDefault(); downloadToDisk(); }}>
         <span className="ext">{fileExt(msg.fileName)}</span>
         <div className="file-meta">
           <div className="fname">{msg.fileName}</div>
@@ -122,7 +153,6 @@ function MediaBubble({ msg, mine, onOpenLightbox }) {
     </div>
   );
 }
-
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
 function Bubble({ msg, mine, onOpenLightbox }) {
